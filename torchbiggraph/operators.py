@@ -99,6 +99,15 @@ class LinearOperator(AbstractOperator):
             embeddings.unsqueeze(-1),
         ).squeeze(-1)
 
+    def prepare_embs_for_reg(self, embs: FloatTensorType) -> FloatTensorType:
+        return torch.matmul(
+            self.linear_transformation.to(device=embs.device),
+            embs.unsqueeze(-1),
+        ).squeeze(-1).abs()
+
+    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
+        return None
+
 
 @OPERATORS.register_as("affine")
 class AffineOperator(AbstractOperator):
@@ -127,6 +136,15 @@ class AffineOperator(AbstractOperator):
                 state_dict.pop(old_param_key).transpose(-1, -2).contiguous()
             )
         super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
+
+    def prepare_embs_for_reg(self, embs: FloatTensorType) -> FloatTensorType:
+        return torch.matmul(
+            self.linear_transformation.to(device=embs.device),
+            embs.unsqueeze(-1),
+        ).squeeze(-1).abs()
+
+    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
+        return self.translation.abs()
 
 
 @OPERATORS.register_as("complex_diagonal")
@@ -273,6 +291,15 @@ class LinearDynamicOperator(AbstractDynamicOperator):
             embeddings.unsqueeze(-1),
         ).squeeze(-1)
 
+    def prepare_embs_for_reg(self, embs: FloatTensorType) -> FloatTensorType:
+        return torch.matmul(
+            self.linear_transformation.to(device=embs.device),
+            embs.unsqueeze(-1),
+        ).squeeze(-1).abs()
+
+    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
+        return None
+
 
 @DYNAMIC_OPERATORS.register_as("affine")
 class AffineDynamicOperator(AbstractDynamicOperator):
@@ -306,6 +333,15 @@ class AffineDynamicOperator(AbstractDynamicOperator):
                 state_dict.pop(old_param_key).transpose(-1, -2).contiguous()
             )
         super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
+
+    def prepare_embs_for_reg(self, embs: FloatTensorType) -> FloatTensorType:
+        return torch.matmul(
+            self.linear_transformation.to(device=embs.device),
+            embs.unsqueeze(-1),
+        ).squeeze(-1).abs()
+
+    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
+        return self.translation.abs()
 
 
 @DYNAMIC_OPERATORS.register_as("complex_diagonal")
