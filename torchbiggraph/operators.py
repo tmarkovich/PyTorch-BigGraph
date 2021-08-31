@@ -5,7 +5,6 @@
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE.txt file in the root directory of this source tree.
-
 from abc import ABC, abstractmethod
 from typing import Dict, List, NamedTuple, Optional, Sequence, Union
 
@@ -291,13 +290,15 @@ class LinearDynamicOperator(AbstractDynamicOperator):
             embeddings.unsqueeze(-1),
         ).squeeze(-1)
 
-    def prepare_embs_for_reg(self, embs: FloatTensorType) -> FloatTensorType:
+    def prepare_embs_for_reg(self, embs: FloatTensorType, operator_idxs) -> FloatTensorType:
+        match_shape(embs, ..., self.dim)
+        match_shape(operator_idxs, *embs.size()[:-1])
         return torch.matmul(
-            self.linear_transformation.to(device=embs.device),
+            self.linear_transformations.to(device=embs.device)[operator_idxs],
             embs.unsqueeze(-1),
         ).squeeze(-1).abs()
 
-    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
+    def get_operator_params_for_reg(self, operator_idxs) -> Optional[FloatTensorType]:
         return None
 
 
@@ -334,14 +335,19 @@ class AffineDynamicOperator(AbstractDynamicOperator):
             )
         super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
 
-    def prepare_embs_for_reg(self, embs: FloatTensorType) -> FloatTensorType:
-        return torch.matmul(
-            self.linear_transformation.to(device=embs.device),
-            embs.unsqueeze(-1),
-        ).squeeze(-1).abs()
+    def prepare_embs_for_reg(self, embeddings: FloatTensorType, operator_idxs) -> FloatTensorType:
+        match_shape(embeddings, ..., self.dim)
+        # We add a dimension so that matmul performs a matrix-vector product.
+        idxs = operator_idxs.reshape(*embeddings.size()[:-1])
+        return (
+            torch.matmul(
+                self.linear_transformations.to(device=embeddings.device)[idxs],
+                embeddings.unsqueeze(-1),
+            ).squeeze(-1)
+        ).abs()
 
-    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
-        return self.translation.abs()
+    def get_operator_params_for_reg(self, operator_idxs) -> Optional[FloatTensorType]:
+        return self.translations[operator_idxs].abs()
 
 
 @DYNAMIC_OPERATORS.register_as("complex_diagonal")

@@ -11,7 +11,7 @@ from typing import Optional
 
 import torch
 import torchbiggraph.model
-from torchbiggraph.operators import AbstractDynamicOperator, AbstractOperator
+from torchbiggraph.operators import AbstractDynamicOperator, AbstractOperator, AffineDynamicOperator, LinearDynamicOperator
 from torchbiggraph.plugin import PluginRegistry
 from torchbiggraph.types import FloatTensorType, LongTensorType
 
@@ -75,7 +75,11 @@ class N3Regularizer(AbstractRegularizer):
             operator_params = operator_params.to(src_pos.device)
             total += torch.sum(operator_params ** 3)
         for x in (src_pos, dst_pos):
-            total += torch.sum(operator.prepare_embs_for_reg(x) ** 3)
+            if isinstance(operator, AffineDynamicOperator) or \
+               isinstance(operator, LinearDynamicOperator):
+                total += torch.sum(operator.prepare_embs_for_reg(x, rel_idxs) ** 3)
+            else:
+                total += torch.sum(operator.prepare_embs_for_reg(x) ** 3)
         total *= self.weight
         return total
 
