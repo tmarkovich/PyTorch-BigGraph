@@ -405,6 +405,7 @@ class MultiRelationEmbedder(nn.Module):
         comparator: AbstractComparator,
         regularizer: AbstractRegularizer,
         global_emb: bool = False,
+        temporal_emb: bool = False,
         max_norm: Optional[float] = None,
         num_dynamic_rels: int = 0,
         half_precision: bool = False,
@@ -440,6 +441,11 @@ class MultiRelationEmbedder(nn.Module):
             self.global_embs = global_embs
         else:
             self.global_embs: Optional[nn.ParameterDict] = None
+
+        self.temporal_embs = False
+        if temporal_emb:
+            self.temporal_emb = True
+            self.dimension = entity_schema.dimension or default_dimension
 
         self.max_norm: Optional[float] = max_norm
         self.half_precision = half_precision
@@ -482,6 +488,9 @@ class MultiRelationEmbedder(nn.Module):
         rel: Union[int, LongTensorType],
         entity_type: str,
         operator: Union[None, AbstractOperator, AbstractDynamicOperator],
+        temporal_weights: Union[None, FloatTensorType],
+        temporal_biases: Union[None, FloatTensorType],
+        times: Union[None, FloatTensorType],
     ) -> FloatTensorType:
 
         # 1. Apply the global embedding, if enabled
@@ -490,6 +499,25 @@ class MultiRelationEmbedder(nn.Module):
                 raise RuntimeError("Cannot have global embs with dynamic rels")
             embs += self.global_embs[self.EMB_PREFIX + entity_type].to(
                 device=embs.device
+            )
+
+        if self.temporal_emb:
+            if self.dimension % 2:
+                raise RuntimeError(
+                "Temporal Embeddings require an even number of dimensions"
+                )
+            """
+            The `split` here critically gives us a _reference_ to each half
+            of the embeddings. That means that we can update the temoporal
+            component as a standard tensor but it propagates back into the full
+            embedding table.
+            """
+            # TODO: Extend to use more than just sigmoids
+            static_embs, temporal_embs = embeddings.split(self.dimension/2)
+            temporal_embs = ( temporal_embs * torch.sigmoid(
+                temporal_weights.to(device=embeddings.device) \
+                        * times.transpose().to(device=embs.device()) \
+                        + temporal_biases.to(device=embs.device())
             )
 
         # 2. Apply the relation operator
