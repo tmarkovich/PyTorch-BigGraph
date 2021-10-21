@@ -40,6 +40,7 @@ def group_by_relation_type(edges: EdgeList) -> List[EdgeList]:
                 edges_for_rel_type.rhs,
                 rel_type,
                 edges_for_rel_type.weight,
+                edges_for_rel_type.time,
             )
         )
     return result

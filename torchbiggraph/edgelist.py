@@ -35,6 +35,15 @@ class EdgeList:
         else:
             cat_weight = None
 
+        if any(el.has_time() for el in edge_lists):
+            if not all(el.has_time() for el in edge_lists):
+                raise RuntimeError(
+                    "Can't concatenate edgelists with and without weight field."
+                )
+            cat_time = torch.cat([el.time.expand((len(el),)) for el in edge_lists])
+        else:
+            cat_time = None
+
         if all(el.has_scalar_relation_type() for el in edge_lists):
             rel_types = {el.get_relation_type_as_scalar() for el in edge_lists}
             if len(rel_types) == 1:
@@ -44,10 +53,11 @@ class EdgeList:
                     cat_rhs,
                     torch.tensor(rel_type, dtype=torch.long),
                     cat_weight,
+                    cat_time,
                 )
         cat_rel = torch.cat([el.rel.expand((len(el),)) for el in edge_lists])
 
-        return cls(cat_lhs, cat_rhs, cat_rel, cat_weight)
+        return cls(cat_lhs, cat_rhs, cat_rel, cat_weight, cat_time)
 
     def __init__(
         self,
@@ -55,6 +65,7 @@ class EdgeList:
         rhs: EntityList,
         rel: LongTensorType,
         weight: Optional[LongTensorType] = None,
+        time: Optional[LongTensorType] = None,
     ) -> None:
         if not isinstance(lhs, EntityList) or not isinstance(rhs, EntityList):
             raise TypeError(
@@ -93,11 +104,26 @@ class EdgeList:
                     "The weight has a different length than the entity lists: "
                     "%d != %d" % (weight.shape[0], len(lhs))
                 )
+        if time is not None and (time.nelement() == 0):
+            time = None
+
+        if time is not None:
+            if time.dim() > 1:
+                raise ValueError(
+                    "The time can be either a scalar or a 1-dimensional "
+                    "tensor, got a %d-dimensional tensor" % weight.dim()
+                )
+            if time.dim() == 1 and time.shape[0] != len(lhs):
+                raise ValueError(
+                    "The time has a different length than the entity lists: "
+                    "%d != %d" % (weight.shape[0], len(lhs))
+                )
 
         self.lhs = lhs
         self.rhs = rhs
         self.rel = rel
         self.weight = weight
+        self.time = time
 
     def has_scalar_relation_type(self) -> bool:
         return self.rel.dim() == 0
@@ -118,8 +144,17 @@ class EdgeList:
         else:
             return self.get_relation_type_as_vector()
 
+    def has_time(self) -> bool:
+        return self.time is not None
+
     def has_weight(self) -> bool:
         return self.weight is not None
+
+    def get_weight(self) -> Union[float, torch.Tensor, None]:
+        if self.has_time():
+            return self.time
+        else:
+            return None
 
     def get_weight(self) -> Union[float, torch.Tensor]:
         if self.has_weight():
@@ -140,7 +175,9 @@ class EdgeList:
         return repr(self)
 
     def __repr__(self) -> str:
-        return "EdgeList(%r, %r, %r, %r)" % (self.lhs, self.rhs, self.rel, self.weight)
+        return "EdgeList(%r, %r, %r, %r, %r)" % (
+                self.lhs, self.rhs, self.rel, self.weight, self.time
+        )
 
     def __getitem__(self, index: Union[int, slice, LongTensorType]) -> "EdgeList":
         if not isinstance(
@@ -167,7 +204,11 @@ class EdgeList:
             sub_weight = self.weight[index]
         else:
             sub_weight = None
-        return type(self)(sub_lhs, sub_rhs, sub_rel, sub_weight)
+        if self.has_time():
+            sub_time = self.time[index]
+        else:
+            sub_time = None
+        return type(self)(sub_lhs, sub_rhs, sub_rel, sub_weight, sub_time)
 
     def __len__(self) -> int:
         return len(self.lhs)

@@ -365,6 +365,8 @@ class FileEdgeAppender(AbstractEdgeAppender):
             self.append_tensor_list("rhsd", edgelist.rhs.tensor_list)
         if edgelist.has_weight():
             self.append_tensor("weight", edgelist.weight)
+        if edgelist.has_time():
+            self.append_tensor("time", edgelist.time)
 
 
 @EDGE_STORAGES.register_as("")  # No scheme
@@ -453,8 +455,19 @@ class FileEdgeStorage(AbstractEdgeStorage):
                         )
                 else:
                     weight = None
+
+                if "time" in hf:
+                    time_ds = hf["time"]
+                    time = allocator((chunk_size,), dtype=torch.long)
+                    if chunk_size > 0:
+                        time_ds = read_direct(
+                                time.numpy(), source_sel=np.s_[begin:end]
+                        )
+                else:
+                    time = None
+
                 return EdgeList(
-                    EntityList(lhs, lhsd), EntityList(rhs, rhsd), rel, weight
+                    EntityList(lhs, lhsd), EntityList(rhs, rhsd), rel, weight, time
                 )
         except OSError as err:
             # h5py refuses to make it easy to figure out what went wrong. The errno
