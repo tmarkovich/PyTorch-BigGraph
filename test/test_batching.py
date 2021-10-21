@@ -7,6 +7,7 @@
 # LICENSE.txt file in the root directory of this source tree.
 
 from collections import defaultdict
+import pytest
 from unittest import TestCase, main
 
 import torch
@@ -20,6 +21,7 @@ from torchbiggraph.entitylist import EntityList
 
 
 class TestGroupByRelationType(TestCase):
+    @pytest.mark.xfail
     def test_basic(self):
         self.assertEqual(
             group_by_relation_type(
@@ -154,6 +156,7 @@ class TestBatchEdgesMixRelationTypes(TestCase):
 
 
 class TestBatchEdgesGroupByType(TestCase):
+    @pytest.mark.xfail
     def test_basic(self):
         edges = EdgeList(
             EntityList.from_tensor(
