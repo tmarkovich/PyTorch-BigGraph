@@ -517,8 +517,8 @@ class MultiRelationEmbedder(nn.Module):
             temporal_embs = ( temporal_embs * torch.sigmoid(
                 temporal_weights.to(device=embeddings.device) \
                         * times.transpose().to(device=embs.device()) \
-                        + temporal_biases.to(device=embs.device())
-            )
+                        + temporal_biases.to(device=embs.device()))
+                        )
 
         # 2. Apply the relation operator
         if operator is not None:
