@@ -555,10 +555,15 @@ class MultiRelationEmbedder(nn.Module):
         rel: Union[int, LongTensorType],
         entity_type: str,
         operator: Union[None, AbstractOperator, AbstractDynamicOperator],
-        temporal_weights: Union[None, FloatTensorType],
-        temporal_biases: Union[None, FloatTensorType],
-        times: Union[None, FloatTensorType],
+        temporal_weights: Union[None, FloatTensorType] = None,
+        temporal_biases: Union[None, FloatTensorType] = None,
+        times: Union[None, FloatTensorType] = None,
     ) -> FloatTensorType:
+        """
+        This function takes the current embeddings and transforms them according to
+        the relationship operator, and, optionally, the learned temporal weights
+        and biases.
+        """
 
         # 1. Apply the global embedding, if enabled
         if self.global_embs is not None:
@@ -567,7 +572,7 @@ class MultiRelationEmbedder(nn.Module):
             embs += self.global_embs[self.EMB_PREFIX + entity_type].to(
                 device=embs.device
             )
-
+        
         if self.temporal_emb:
             if self.dimension % 2:
                 raise RuntimeError(
