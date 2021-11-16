@@ -475,17 +475,31 @@ class MultiRelationEmbedder(nn.Module):
         else:
             self.global_embs: Optional[nn.ParameterDict] = None
 
-        self.temporal_embs = False
+        self.temporal_emb = False
         if temporal_emb:
             self.temporal_emb = True
             self.dimension = entity_schema.dimension or default_dimension
+            self.temporal_weights: nn.ParameterDict = nn.ModuleDict()
+            self.temporal_bias: nn.ParameterDict = nn.ModuleDict()
+        else:
+            self.temporal_weights: Optional[nn.ParameterDict] = None
+            self.temporal_bias: Optional[nn.ParameterDict] = None
 
         self.max_norm: Optional[float] = max_norm
         self.half_precision = half_precision
         self.regularizer: Optional[AbstractRegularizer] = regularizer
 
-    def set_embeddings(self, entity: str, side: Side, weights: nn.Parameter) -> None:
-        if self.entities[entity].featurized:
+    def set_embeddings(
+        self,
+        entity: str,
+        side: Side,
+        weights: nn.Parameter,
+        temporal_weights: Optional[nn.Parameter] = None,
+        temporal_bias: Optional[nn.Parameter] = None
+        ) -> None:
+        if (temporal_weights is not None) and (temporal_bias is not None):
+            emb = TemporalSimpleEmbedding(weights, temporal_weights, temporal_bias, max_norm=self.max_norm)
+        elif self.entities[entity].featurized:
             emb = FeaturizedEmbedding(weights, max_norm=self.max_norm)
         else:
             emb = SimpleEmbedding(weights, max_norm=self.max_norm)
@@ -496,19 +510,35 @@ class MultiRelationEmbedder(nn.Module):
         # utils.py cannot depend on model.py.
         for entity in holder.lhs_unpartitioned_types:
             self.set_embeddings(
-                entity, Side.LHS, holder.unpartitioned_embeddings[entity]
+                entity,
+                Side.LHS,
+                holder.unpartitioned_embeddings[entity],
+                holder.unpartitioned_temporal_weights[entity] if self.temporal_emb else None,
+                holder.unpartitioned_temporal_biases[entity] if self.temporal_emb else None
             )
         for entity in holder.rhs_unpartitioned_types:
             self.set_embeddings(
-                entity, Side.RHS, holder.unpartitioned_embeddings[entity]
+                entity,
+                Side.RHS,
+                holder.unpartitioned_embeddings[entity],
+                holder.unpartitioned_temporal_weights[entity] if self.temporal_emb else None,
+                holder.unpartitioned_temporal_biases[entity] if self.temporal_emb else None
             )
         for entity in holder.lhs_partitioned_types:
             self.set_embeddings(
-                entity, Side.LHS, holder.partitioned_embeddings[entity, bucket.lhs]
+                entity,
+                Side.LHS,
+                holder.partitioned_embeddings[entity, bucket.lhs],
+                holder.partitioned_temporal_weights[entity, bucket.lhs] if self.temporal_emb else None,
+                holder.partitioned_temporal_biases[entity, bucket.lhs] if self.temporal_emb else None
             )
         for entity in holder.rhs_partitioned_types:
             self.set_embeddings(
-                entity, Side.RHS, holder.partitioned_embeddings[entity, bucket.rhs]
+                entity,
+                Side.RHS,
+                holder.partitioned_embeddings[entity, bucket.rhs],
+                holder.partitioned_temporal_weights[entity, bucket.lhs] if self.temporal_emb else None,
+                holder.partitioned_temporal_biases[entity, bucket.lhs] if self.temporal_emb else None
             )
 
     def clear_all_embeddings(self) -> None:
