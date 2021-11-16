@@ -409,7 +409,15 @@ class EmbeddingHolder:
             self.rhs_unpartitioned_types = set()
 
         self.unpartitioned_embeddings: Dict[EntityName, torch.nn.Parameter] = {}
+        self.unpartitioned_temporal_weights: Dict[EntityName, torch.nn.Parameter] = {}
+        self.unpartitioned_temporal_biases: Dict[EntityName, torch.nn.Parameter] = {}
         self.partitioned_embeddings: Dict[
+            Tuple[EntityName, Partition], torch.nn.Parameter
+        ] = {}
+        self.partitioned_temporal_weights: Dict[
+            Tuple[EntityName, Partition], torch.nn.Parameter
+        ] = {}
+        self.partitioned_temporal_biases: Dict[
             Tuple[EntityName, Partition], torch.nn.Parameter
         ] = {}
 
