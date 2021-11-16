@@ -544,6 +544,10 @@ class MultiRelationEmbedder(nn.Module):
     def clear_all_embeddings(self) -> None:
         self.lhs_embs.clear()
         self.rhs_embs.clear()
+        if self.temporal_bias is not None:
+            self.temporal_bias.clear()
+        if self.temporal_weights is not None:
+            self.temporal_weights.clear()
 
     def adjust_embs(
         self,
