@@ -616,6 +616,9 @@ class MultiRelationEmbedder(nn.Module):
         rel: Union[int, LongTensorType],
         entity_type: str,
         operator: Union[None, AbstractOperator, AbstractDynamicOperator],
+        temporal_weights: Optional[FloatTensorType] = None,
+        temporal_bias: Optional[FloatTensorType] = None,
+        times: Optional[FloatTensorType] = None,
     ) -> Tuple[FloatTensorType, Mask]:
         """Given some chunked positives, set up chunks of negatives.
 
@@ -643,7 +646,15 @@ class MultiRelationEmbedder(nn.Module):
             neg_embs = pos_embs.new_empty((num_chunks, 0, dim))
         elif type_ is Negatives.UNIFORM:
             uniform_neg_embs = module.sample_entities(num_chunks, num_uniform_neg)
-            neg_embs = self.adjust_embs(uniform_neg_embs, rel, entity_type, operator)
+            neg_embs = self.adjust_embs(
+                uniform_neg_embs,
+                rel,
+                entity_type,
+                operator,
+                temporal_weights if self.temporal_embs is not None else None,
+                temporal_bias if self.temporal_embs is not None else None,
+                times if self.temporal_embs is not None else None,
+            )
         elif type_ is Negatives.BATCH_UNIFORM:
             neg_embs = pos_embs
             if num_uniform_neg > 0:
@@ -658,7 +669,13 @@ class MultiRelationEmbedder(nn.Module):
                         [
                             pos_embs,
                             self.adjust_embs(
-                                uniform_neg_embs, rel, entity_type, operator
+                                uniform_neg_embs,
+                                rel,
+                                entity_type,
+                                operator,
+                                temporal_weights if self.temporal_embs is not None else None,
+                                temporal_bias if self.temporal_embs is not None else None,
+                                times if self.temporal_embs is not None else None,
                             ),
                         ],
                         dim=1,
@@ -687,6 +704,9 @@ class MultiRelationEmbedder(nn.Module):
                 rel,
                 entity_type,
                 operator,
+                temporal_weights if self.temporal_embs is not None else None,
+                temporal_bias if self.temporal_embs is not None else None,
+                times if self.temporal_embs is not None else None,
             )
 
             if num_uniform_neg > 0:
