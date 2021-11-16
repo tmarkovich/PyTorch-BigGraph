@@ -75,6 +75,39 @@ class SimpleEmbedding(AbstractEmbedding):
         )
 
 
+class TemporalSimpleEmbedding(AbstractEmbedding):
+    def __init__(self, weight: nn.Parameter, temporal_weights: nn.Parameter, temporal_bias: nn.Parameter, max_norm: Optional[float] = None):
+        super().__init__()
+        self.weight: nn.Parameter = weight
+        self.temporal_weight: nn.Parameter = temporal_weights
+        self.temporal_bias: nn.Parameter = temporal_bias
+        self.max_norm: Optional[float] = max_norm
+
+    def forward(self, input_: EntityList) -> FloatTensorType:
+        return self.get(input_.to_tensor())
+
+    def get(self, input_: LongTensorType) -> Tuple[FloatTensorType, FloatTensorType, FloatTensorType]:
+        return (
+            F.embedding(input_, self.weight, max_norm=self.max_norm, sparse=True),
+            F.embedding(input_, self.temporal_weight, max_norm=self.max_norm, sparse=True),
+            F.embedding(input_, self.temporal_weight, max_norm=self.max_norm, sparse=True)
+        )
+
+    def get_all_entities(self) -> Tuple[FloatTensorType, FloatTensorType, FloatTensorType]:
+        return self.get(
+            torch.arange(
+                self.weight.size(0), dtype=torch.long, device=self.weight.device
+            )
+        )
+
+    def sample_entities(self, *dims: int) -> Tuple[FloatTensorType, FloatTensorType, FloatTensorType]:
+        return self.get(
+            torch.randint(
+                low=0, high=self.weight.size(0), size=dims, device=self.weight.device
+            )
+        )
+
+
 class FeaturizedEmbedding(AbstractEmbedding):
     def __init__(self, weight: nn.Parameter, max_norm: Optional[float] = None):
         super().__init__()
