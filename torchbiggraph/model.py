@@ -90,7 +90,7 @@ class TemporalSimpleEmbedding(AbstractEmbedding):
         return (
             F.embedding(input_, self.weight, max_norm=self.max_norm, sparse=True),
             F.embedding(input_, self.temporal_weight, max_norm=self.max_norm, sparse=True),
-            F.embedding(input_, self.temporal_weight, max_norm=self.max_norm, sparse=True)
+            F.embedding(input_, self.temporal_bias, max_norm=self.max_norm, sparse=True)
         )
 
     def get_all_entities(self) -> Tuple[FloatTensorType, FloatTensorType, FloatTensorType]:
@@ -763,8 +763,20 @@ class MultiRelationEmbedder(nn.Module):
         relation = self.relations[relation_idx]
         lhs_module: AbstractEmbedding = self.lhs_embs[self.EMB_PREFIX + relation.lhs]
         rhs_module: AbstractEmbedding = self.rhs_embs[self.EMB_PREFIX + relation.rhs]
-        lhs_pos: FloatTensorType = lhs_module(edges.lhs)
-        rhs_pos: FloatTensorType = rhs_module(edges.rhs)
+        lhs_pos: FloatTensorType
+        lhs_w: Union[FloatTensorType, None]
+        lhs_b: Union[FloatTensorType, None]
+        rhs_pos: FloatTensorType
+        rhs_w: Union[FloatTensorType, None]
+        rhs_b: Union[FloatTensorType, None]
+        if self.temporal_emb:
+            lhs_pos, lhs_w, lhs_b = lhs_module(edges.lhs, edges.time)
+            rhs_pos, rhs_w, rhs_b = rhs_module(edges.rhs, edges.time)           
+        else:
+            lhs_pos: FloatTensorType = lhs_module(edges.lhs)
+            rhs_pos: FloatTensorType = rhs_module(edges.rhs)
+            lhs_w, lhs_b, rhs_w, rhs_b = None, None, None, None
+
 
         if relation.all_negs:
             chunk_size = num_pos
@@ -898,12 +910,17 @@ class MultiRelationEmbedder(nn.Module):
         chunk_size: int,
         src_negative_sampling_method: Negatives,
         dst_negative_sampling_method: Negatives,
+        times: Optional[FloatTensorType] = None,
+        src_temporal_weights: Optional[FloatTensorType] = None,
+        src_temporal_biases: Optional[FloatTensorType] = None,
+        dst_temporal_weights: Optional[FloatTensorType] = None,
+        dst_temporal_biases: Optional[FloatTensorType] = None,
     ):
         num_pos = len(src)
         assert len(dst) == num_pos
 
-        src_pos = self.adjust_embs(src_pos, rel, src_entity_type, src_operator)
-        dst_pos = self.adjust_embs(dst_pos, rel, dst_entity_type, dst_operator)
+        src_pos = self.adjust_embs(src_pos, rel, src_entity_type, src_operator, src_temporal_weights, src_temporal_biases, times)
+        dst_pos = self.adjust_embs(dst_pos, rel, dst_entity_type, dst_operator, dst_temporal_weights, dst_temporal_biases, times)
 
         num_chunks = ceil_of_ratio(num_pos, chunk_size)
         src_dim = src_pos.size(-1)
@@ -929,6 +946,9 @@ class MultiRelationEmbedder(nn.Module):
             rel,
             src_entity_type,
             src_operator,
+            src_temporal_weights,
+            src_temporal_biases,
+            times,
         )
         dst_neg, dst_ignore_mask = self.prepare_negatives(
             dst,
@@ -939,6 +959,9 @@ class MultiRelationEmbedder(nn.Module):
             rel,
             dst_entity_type,
             dst_operator,
+            dst_temporal_weights,
+            dst_temporal_biases,
+            times,
         )
 
         pos_scores, src_neg_scores, dst_neg_scores = self.comparator(
@@ -1042,6 +1065,7 @@ def make_model(config: ConfigSchema) -> MultiRelationEmbedder:
         comparator=comparator,
         regularizer=regularizer,
         global_emb=config.global_emb,
+        temporal_emb=config.temporal_emb,
         max_norm=config.max_norm,
         num_dynamic_rels=num_dynamic_rels,
         half_precision=config.half_precision,
