@@ -651,9 +651,9 @@ class MultiRelationEmbedder(nn.Module):
                 rel,
                 entity_type,
                 operator,
-                temporal_weights if self.temporal_embs is not None else None,
-                temporal_bias if self.temporal_embs is not None else None,
-                times if self.temporal_embs is not None else None,
+                temporal_weights if self.temporal_emb is not None else None,
+                temporal_bias if self.temporal_emb is not None else None,
+                times if self.temporal_emb is not None else None,
             )
         elif type_ is Negatives.BATCH_UNIFORM:
             neg_embs = pos_embs
@@ -673,9 +673,9 @@ class MultiRelationEmbedder(nn.Module):
                                 rel,
                                 entity_type,
                                 operator,
-                                temporal_weights if self.temporal_embs is not None else None,
-                                temporal_bias if self.temporal_embs is not None else None,
-                                times if self.temporal_embs is not None else None,
+                                temporal_weights if self.temporal_emb is not None else None,
+                                temporal_bias if self.temporal_emb is not None else None,
+                                times if self.temporal_emb is not None else None,
                             ),
                         ],
                         dim=1,
@@ -704,9 +704,9 @@ class MultiRelationEmbedder(nn.Module):
                 rel,
                 entity_type,
                 operator,
-                temporal_weights if self.temporal_embs is not None else None,
-                temporal_bias if self.temporal_embs is not None else None,
-                times if self.temporal_embs is not None else None,
+                temporal_weights if self.temporal_emb is not None else None,
+                temporal_bias if self.temporal_emb is not None else None,
+                times if self.temporal_emb is not None else None,
             )
 
             if num_uniform_neg > 0:
