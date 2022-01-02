@@ -186,6 +186,14 @@ class ConfigSchema(Schema):
             "vector is learned during training."
         },
     )
+    temporal_emb: bool = attr.ib(
+        default=False,
+        metadata={
+            "help": "If enabled, partition each embedding vector into "
+            "a static and temporal component. See arXiv:1907.03143 for "
+            "more information."
+        },
+    )
     comparator: str = attr.ib(
         default="cos",
         metadata={
