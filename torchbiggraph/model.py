@@ -15,6 +15,7 @@ from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.linalg import vector_norm
 from torchbiggraph.config import ConfigSchema, EntitySchema, RelationSchema
 from torchbiggraph.edgelist import EdgeList
 from torchbiggraph.entitylist import EntityList
@@ -455,6 +456,7 @@ class MultiRelationEmbedder(nn.Module):
     def set_all_embeddings(self, holder: EmbeddingHolder, bucket: Bucket) -> None:
         # This could be a method of the EmbeddingHolder, but it's here as
         # utils.py cannot depend on model.py.
+        self.mapping = {}
         for entity in holder.lhs_unpartitioned_types:
             self.set_embeddings(
                 entity, Side.LHS, holder.unpartitioned_embeddings[entity]
@@ -463,6 +465,7 @@ class MultiRelationEmbedder(nn.Module):
             self.set_embeddings(
                 entity, Side.RHS, holder.unpartitioned_embeddings[entity]
             )
+        
         for entity in holder.lhs_partitioned_types:
             self.set_embeddings(
                 entity, Side.LHS, holder.partitioned_embeddings[entity, bucket.lhs]
@@ -622,6 +625,25 @@ class MultiRelationEmbedder(nn.Module):
 
         return neg_embs, ignore_mask
 
+    def gen_uniq(self, elist, device):
+        tmp = []
+        for i in range(len(elist)):
+            try:
+                tmp.append(int(elist[i].to_tensor()))
+            except:
+                pass
+            if i > 10:
+                break
+        uniq = set(tmp)
+        out = list(uniq)
+        return out, EntityList(
+            torch.cuda.LongTensor(out, device=device),
+            TensorList(
+                torch.cuda.LongTensor([0] * (len(out) + 1), device=device),
+                torch.cuda.LongTensor([], device=device)
+            )
+        )
+
     def forward(self, edges: EdgeList) -> Scores:
         num_pos = len(edges)
 
@@ -757,6 +779,22 @@ class MultiRelationEmbedder(nn.Module):
                 reg = None
             else:
                 reg = l_reg + r_reg
+
+        if True:
+            old_embs = torch.load('old_embs.trch')
+            
+            dev = lhs_module.get_all_entities()[0].device
+            lhs_elist, lhs_elist_tensor = self.gen_uniq(edges.lhs, dev)
+            new_lhs = lhs_module(lhs_elist_tensor)
+            old_lhs = old_embs[lhs_elist]
+            
+            rhs_elist, rhs_elist_tensor = self.gen_uniq(edges.rhs, dev)
+            new_rhs = rhs_module(rhs_elist_tensor)
+            old_rhs = old_embs[rhs_elist]
+            
+            reg += 10*vector_norm(new_lhs.to(device=dev) - old_lhs.to(device=dev), dim=1).sum()
+            reg += 10*vector_norm(new_rhs.to(device=dev) - old_rhs.to(device=dev), dim=1).sum()
+    
         return (
             Scores(lhs_pos_scores, rhs_pos_scores, lhs_neg_scores, rhs_neg_scores),
             reg,
