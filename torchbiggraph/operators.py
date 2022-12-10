@@ -47,6 +47,182 @@ class AbstractOperator(nn.Module, ABC):
 OPERATORS = PluginRegistry[AbstractOperator]()
 
 
+@OPERATORS.register_as("RotH")
+class RotH_Operator(AbstractOperator):
+    def __init__(self, dim: int,  bias = True):
+        super().__init__(dim, bias)
+        self.bias = bias
+        self.data_type = torch.float
+
+        if self.bias == True:
+            self.dim = self.dim - 1
+
+        data = 2 * torch.rand((self.dim, ), dtype=self.data_type) - 1.0
+        self.rot_diag = nn.Parameter(data, requires_grad=True)
+        self.rel = nn.Parameter(torch.rand((self.dim, )), requires_grad=True)
+        c_init = torch.ones((1, ), dtype=self.data_type)
+        self.c = nn.Parameter(c_init, requires_grad=True)
+
+    def get_rotation_queries(self, queries):
+        rot_diag = self.rot_diag.to(device=queries.device).view(1, -1)
+
+        return givens_rotations_n(rot_diag, queries)
+
+    def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
+
+        if self.bias == True:
+            bias_term = embeddings[..., :1]
+            embeddings = embeddings[..., 1:]
+
+        match_shape(embeddings, ..., self.dim)
+        lhs_rot_e = self.get_rotation_queries(embeddings).view((-1, 1, self.dim))
+        rel_bias = self.rel.to(device=embeddings.device).view(1, -1)
+        c = self.c.to(device=embeddings.device).view(1, -1).expand(embeddings.shape[0], -1)
+        c = F.softplus(c)
+        lhs_rot_e = lhs_rot_e.view(-1, self.dim)
+        rel_bias = expmap0(rel_bias, c)
+        result = expmap0(lhs_rot_e, c)
+        result = project(mobius_add(result, rel_bias, c), c)
+
+        if self.bias == True:
+            result = torch.cat([c, bias_term, result], dim=-1)
+
+        return result
+
+    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
+        return self.rel.to(device=operator_idxs.device).abs()
+
+
+@OPERATORS.register_as("RefH")
+class RefH_Operator(AbstractOperator):
+    def __init__(self, dim: int,  bias = True):
+        super().__init__(dim, bias)
+        self.bias = bias
+        self.data_type = torch.float
+
+        if self.bias == True:
+            self.dim = self.dim - 1
+
+        data = 2 * torch.rand((self.dim, ), dtype=self.data_type) - 1.0
+        self.ref_diag = nn.Parameter(data, requires_grad=True)
+
+        self.rel = nn.Parameter(torch.rand((self.dim, )), requires_grad=True)
+
+        c_init = torch.ones((1, ), dtype=self.data_type)
+        self.c = nn.Parameter(c_init, requires_grad=True)
+
+    def get_reflection_queries(self, queries):
+        ref_diag = self.ref_diag.to(device=queries.device).view(1, -1)
+
+        return givens_reflection_n(ref_diag, queries)
+
+    def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
+
+        if self.bias == True:
+            bias_term = embeddings[..., :1]
+            embeddings = embeddings[..., 1:]
+
+        match_shape(embeddings, ..., self.dim)
+
+        lhs_rot_e = self.get_reflection_queries(embeddings).view((-1, 1, self.dim))
+        rel_bias = self.rel.to(device=embeddings.device).view(1, -1)
+        c = self.c.to(device=embeddings.device).view(1, -1).expand(embeddings.shape[0], -1)
+        c = F.softplus(c)
+
+        lhs_rot_e = lhs_rot_e.view(-1, self.dim)
+
+        rel_bias = expmap0(rel_bias, c)
+        result = expmap0(lhs_rot_e, c)
+
+        result = project(mobius_add(result, rel_bias, c), c)
+
+        if self.bias == True:
+            result = torch.cat([c, bias_term, result], dim=-1)
+
+        return result
+
+    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
+        return self.rel.to(device=operator_idxs.device).abs()
+
+
+@OPERATORS.register_as("AttH")
+class AttHyper_Operator(AbstractOperator):
+    def __init__(self, dim: int,  bias = True):
+        super().__init__(dim, bias)
+        self.bias = bias
+        self.data_type = torch.float
+
+        if self.bias == True:
+            self.dim = self.dim - 1
+
+        data = 2 * torch.rand((self.dim, ), dtype=self.data_type) - 1.0
+        self.ref_diag = nn.Parameter(data, requires_grad=True)
+
+
+        data = 2 * torch.rand((self.dim, ), dtype=self.data_type) - 1.0
+        self.rot_diag = nn.Parameter(data, requires_grad=True)
+
+
+        data = torch.randn((self.dim, ), requires_grad=True)
+        self.context_vec = nn.Parameter(data, requires_grad=True)
+
+        self.act = nn.Softmax(dim=1)
+
+        scale_data = torch.Tensor([1. / np.sqrt(self.dim)])
+        self.scale = nn.Parameter(scale_data)
+        self.scale.requires_grad = False
+
+        self.rel = nn.Parameter(torch.rand((self.dim, )), requires_grad=True)
+
+        c_init = torch.ones((1, ), dtype=self.data_type)
+        self.c = nn.Parameter(c_init, requires_grad=True)
+
+
+    def get_reflection_queries(self, queries):
+        rot_diag = self.rot_diag.to(device=queries.device).view(1, -1)
+
+        return givens_reflection_n(rot_diag, queries)
+
+    def get_rotation_queries(self, queries):
+        ref_diag = self.ref_diag.to(device=queries.device).view(1, -1)
+
+        return givens_rotations_n(ref_diag, queries)
+
+    def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
+
+        if self.bias == True:
+            bias_term = embeddings[..., :1]
+            embeddings = embeddings[..., 1:]
+
+        match_shape(embeddings, ..., self.dim)
+
+        lhs_ref_e = self.get_reflection_queries(embeddings).view((-1, 1, self.dim))
+        lhs_rot_e = self.get_rotation_queries(embeddings).view((-1, 1, self.dim))
+        att_matrix = self.context_vec.to(device=embeddings.device)
+        rel_bias = self.rel.to(device=embeddings.device).view(1, -1)
+
+        c = self.c.to(device=embeddings.device).view(1, -1).expand(embeddings.shape[0], -1)
+        c = F.softplus(c)
+
+        cands = torch.cat([lhs_ref_e, lhs_rot_e], dim=1)
+        context_vec = att_matrix.view((-1, 1, self.dim))
+        scale = self.scale.to(device=embeddings.device)
+        att_weights = torch.sum(context_vec * cands * scale, dim=-1, keepdim=True)
+        att_weights = self.act(att_weights)
+        result = torch.sum(att_weights * cands, dim=1)
+        rel_bias = expmap0(rel_bias, c)
+        result = expmap0(result, c)
+        result = project(mobius_add(result, rel_bias, c), c)
+
+        if self.bias == True:
+            result = torch.cat([c, bias_term, result], dim=-1)
+        return result
+
+    def get_operator_params_for_reg(self) -> Optional[FloatTensorType]:
+        return self.rel.to(device=operator_idxs.device).abs()
+
+
+
 @OPERATORS.register_as("none")
 class IdentityOperator(AbstractOperator):
     def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
