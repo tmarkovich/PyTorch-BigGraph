@@ -52,7 +52,7 @@ def old_hyp_distance(x, y, c, eval_mode=False):
     num = torch.sqrt((c1 ** 2) * x2 + (c2 ** 2) * y2 - (2 * c1 * c2) * xy)
     denom = 1 - 2 * c * xy + c ** 2 * x2 * y2
     pairwise_norm = num / denom.clamp_min(MIN_NORM)
-    dist = artanh(sqrt_c * pairwise_norm)
+    dist = torch.atanh(sqrt_c * pairwise_norm)
     return 2 * dist / sqrt_c
 
 
@@ -71,7 +71,7 @@ def hyp_distance_multi_c(x, v, c, eval_mode=False):
     num = torch.sqrt((c1 ** 2) * x2 + (c2 ** 2) * (gamma ** 2) - (2 * c1 * c2) * gamma * xv)
     denom = 1 - 2 * c * gamma * xv + (c ** 2) * (gamma ** 2) * x2
     pairwise_norm = num / denom.clamp_min(MIN_NORM)
-    dist = artanh(sqrt_c * pairwise_norm)
+    dist = torch.atanh(sqrt_c * pairwise_norm)
     return 2 * dist / sqrt_cdef rotation(r, x):
 
 def rotation(r, x):
